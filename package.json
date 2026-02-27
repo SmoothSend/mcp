@@ -1,0 +1,35 @@
+{
+  "name": "@smoothsend/mcp",
+  "version": "1.0.0",
+  "description": "MCP server for SmoothSend — enables AI assistants to help developers integrate gasless transactions on Aptos",
+  "type": "module",
+  "bin": {
+    "smoothsend-mcp": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "smoothsend",
+    "aptos",
+    "gasless",
+    "transactions",
+    "blockchain"
+  ],
+  "author": "SmoothSend",
+  "license": "MIT"
+}
