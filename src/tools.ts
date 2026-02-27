@@ -277,21 +277,46 @@ export function handleGetDocs(args: { topic: string }): string {
   return doc.content
 }
 
-export function handleEstimateCredits(args: {
+async function fetchAptPrice(): Promise<{ price: number; live: boolean }> {
+  try {
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=aptos&vs_currencies=usd',
+      { signal: AbortSignal.timeout(5000) }
+    )
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    const data = (await res.json()) as { aptos?: { usd?: number } }
+    const price = data?.aptos?.usd
+    if (typeof price !== 'number' || price <= 0) throw new Error('Invalid price')
+    return { price, live: true }
+  } catch {
+    return { price: 2.0, live: false }
+  }
+}
+
+export async function handleEstimateCredits(args: {
   gas_used: number
   gas_unit_price?: number
   apt_price_usd?: number
   volume: number
-}): string {
+}): Promise<string> {
   const gasUsed = args.gas_used
   const gasUnitPrice = args.gas_unit_price ?? 100
-  const aptPriceUsd = args.apt_price_usd ?? 8.0
   const volume = args.volume
 
-  // Aptos fee calculation:
-  // total_internal_gas = gas_used * 1,000,000 (approximation for external units display)
+  // Use caller-supplied price if given, otherwise fetch live from CoinGecko
+  let aptPriceUsd: number
+  let priceSource: string
+  if (typeof args.apt_price_usd === 'number' && args.apt_price_usd > 0) {
+    aptPriceUsd = args.apt_price_usd
+    priceSource = 'provided'
+  } else {
+    const { price, live } = await fetchAptPrice()
+    aptPriceUsd = price
+    priceSource = live ? 'live (CoinGecko)' : 'fallback $2.00 (CoinGecko unavailable)'
+  }
+
   // fee_octas = gas_used * gas_unit_price
-  // fee_apt = fee_octas / 10^8
+  // fee_apt  = fee_octas / 10^8
   const feeOctas = gasUsed * gasUnitPrice
   const feeApt = feeOctas / 1e8
   const feeUsd = feeApt * aptPriceUsd
@@ -308,7 +333,7 @@ export function handleEstimateCredits(args: {
     `**Inputs:**`,
     `- Gas used: ${gasUsed.toLocaleString()} units`,
     `- Gas unit price: ${gasUnitPrice} octas`,
-    `- APT price: $${aptPriceUsd.toFixed(2)}`,
+    `- APT price: $${aptPriceUsd.toFixed(2)} (${priceSource})`,
     `- Volume: ${volume.toLocaleString()} tx/month`,
     ``,
     `**Per Transaction:**`,

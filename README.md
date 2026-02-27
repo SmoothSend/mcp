@@ -123,4 +123,3 @@ node dist/index.js
 - Dashboard: https://dashboard.smoothsend.xyz
 - Docs: https://docs.smoothsend.xyz
 - npm: https://www.npmjs.com/package/@smoothsend/sdk
-# mcp

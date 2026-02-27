@@ -47,7 +47,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         break
 
       case 'estimate_credits':
-        text = handleEstimateCredits(
+        text = await handleEstimateCredits(
           args as {
             gas_used: number
             gas_unit_price?: number
