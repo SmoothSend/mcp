@@ -55,10 +55,13 @@ After this, every \`signAndSubmitTransaction\` call in your app is automatically
 - Secure by default: API key auth, rate limiting, gateway-level validation on every request
 - Multi-chain roadmap: Aptos live now, EVM and Stellar coming soon
 
-## Two Integration Methods
+## Three Integration Methods
 
-### Method 1 — Wallet Adapter (Recommended)
-Pass \`SmoothSendTransactionSubmitter\` as the \`transactionSubmitter\` to \`AptosWalletAdapterProvider\`. Works for any transaction type. Credits deducted from your dashboard balance.
+### Method 1 — Wallet Adapter (All gasless)
+Pass \`SmoothSendTransactionSubmitter\` as the \`transactionSubmitter\` to \`AptosWalletAdapterProvider\`. Every \`signAndSubmitTransaction\` call becomes gasless automatically. Works for any transaction type. Credits deducted from your dashboard balance.
+
+### Method 1b — useSmoothSend Hook (Per-function routing)
+Use \`useSmoothSend(submitter)\` when only specific functions should be sponsored. The hook automatically routes each transaction: functions in your Sponsorship Rules allowlist → gasless; others → user pays gas normally. Do NOT use \`transactionSubmitter\` in the provider when using this hook.
 
 ### Method 2 — Script Composer (Fee-in-Token)
 Use \`ScriptComposerClient\` for stablecoin transfers (USDC, USDT, WBTC, USDe, USD1). The relayer fee (~$0.01) is deducted directly from the token being sent. No APT or SmoothSend credits required.
@@ -235,6 +238,38 @@ const smoothSend = new SmoothSendTransactionSubmitter({
   network: 'testnet',
 });
 \`\`\`
+
+## Advanced: useSmoothSend Hook (Per-Function Routing)
+
+Use \`useSmoothSend\` when only **specific functions** should be gasless. The hook fetches your project's Sponsorship Rules allowlist and auto-routes each transaction.
+
+**Important:** Do NOT set \`transactionSubmitter\` in \`AptosWalletAdapterProvider\` when using this hook:
+
+\`\`\`typescript
+import { useSmoothSend, SmoothSendTransactionSubmitter } from '@smoothsend/sdk';
+
+// Create once at MODULE SCOPE, not inside a component
+const submitter = new SmoothSendTransactionSubmitter({
+  apiKey: process.env.NEXT_PUBLIC_SMOOTHSEND_API_KEY!,
+  network: 'mainnet',
+});
+
+function TodoList() {
+  const { signAndSubmitTransaction } = useSmoothSend(submitter);
+
+  const handleDelete = async (id: number) => {
+    // 'delete_todo' in allowlist → gasless
+    // 'create_todo' not in allowlist → user pays gas
+    const result = await signAndSubmitTransaction({
+      data: {
+        function: \`\${MODULE_ADDRESS}::todolist::delete_todo\`,
+        functionArguments: [id],
+      },
+    });
+    console.log('Tx hash:', result.hash);
+  };
+}
+\`\`\`
 `,
   },
 
@@ -275,6 +310,70 @@ const submitter = new SmoothSendTransactionSubmitter({
 
 // Pass to AptosWalletAdapterProvider as transactionSubmitter
 \`\`\`
+
+---
+
+## useSmoothSend Hook
+
+React hook for per-function gasless routing. Sponsored functions (in your Sponsorship Rules allowlist) go gasless; others fall back to user-pays-gas. Drop-in replacement for \`useWallet().signAndSubmitTransaction\`.
+
+### Signature
+
+\`\`\`typescript
+import { useSmoothSend } from '@smoothsend/sdk';
+
+const { signAndSubmitTransaction } = useSmoothSend(submitter);
+\`\`\`
+
+**Parameter:** \`submitter\` — a \`SmoothSendTransactionSubmitter\` instance. Create it once at module scope (outside the component).
+
+**Returns:** \`{ signAndSubmitTransaction }\` — same call signature as \`useWallet().signAndSubmitTransaction\`. Auto-routes based on Sponsorship Rules.
+
+### Usage
+
+\`\`\`typescript
+import { useSmoothSend, SmoothSendTransactionSubmitter } from '@smoothsend/sdk';
+
+const submitter = new SmoothSendTransactionSubmitter({
+  apiKey: process.env.NEXT_PUBLIC_SMOOTHSEND_API_KEY!,
+  network: 'mainnet',
+});
+
+function MyComponent() {
+  const { signAndSubmitTransaction } = useSmoothSend(submitter);
+
+  const handleDelete = async (id: number) => {
+    // If 'delete_todo' is in Sponsorship Rules → gasless
+    // If not in allowlist → user pays gas normally
+    const result = await signAndSubmitTransaction({
+      data: {
+        function: \`\${MODULE_ADDRESS}::todolist::delete_todo\`,
+        functionArguments: [id],
+      },
+    });
+    console.log('Tx hash:', result.hash);
+  };
+}
+\`\`\`
+
+**Note:** Do NOT set \`transactionSubmitter\` in \`AptosWalletAdapterProvider\` when using \`useSmoothSend\` — they conflict.
+
+### submitter.getSponsoredFunctions()
+
+\`\`\`typescript
+const functions: string[] = await submitter.getSponsoredFunctions();
+// e.g. ['0xAbc::todolist::delete_todo', '0xAbc::nft::mint']
+\`\`\`
+
+Fetches sponsored functions from the gateway. Results cached in memory — safe to call repeatedly.
+
+### submitter.isSponsored(functionName)
+
+\`\`\`typescript
+const sponsored: boolean = await submitter.isSponsored('0xAbc::todolist::delete_todo');
+\`\`\`
+
+Returns \`true\` if the function identifier is in the project's sponsorship allowlist.
 
 ---
 
@@ -551,6 +650,55 @@ export function DevProviders({ children }) {
     >
       {children}
     </AptosWalletAdapterProvider>
+  );
+}
+\`\`\`
+
+## Example 6 — useSmoothSend Per-Function Routing
+
+Some functions sponsored (gasless), others not (user pays gas). Use \`useSmoothSend\` hook:
+
+\`\`\`typescript
+import { useSmoothSend, SmoothSendTransactionSubmitter } from '@smoothsend/sdk';
+
+const MODULE = '0xYourModuleAddress';
+
+// Create once at module scope, NOT inside the component
+const submitter = new SmoothSendTransactionSubmitter({
+  apiKey: process.env.NEXT_PUBLIC_SMOOTHSEND_API_KEY!,
+  network: 'mainnet',
+});
+
+function TodoList() {
+  const { signAndSubmitTransaction } = useSmoothSend(submitter);
+
+  // 'create_todo' NOT in Sponsorship Rules → user pays gas
+  const handleCreate = async (content: string) => {
+    const result = await signAndSubmitTransaction({
+      data: {
+        function: \`\${MODULE}::todolist::create_todo\`,
+        functionArguments: [content],
+      },
+    });
+    console.log('Created:', result.hash);
+  };
+
+  // 'delete_todo' IS in Sponsorship Rules → gasless
+  const handleDelete = async (id: number) => {
+    const result = await signAndSubmitTransaction({
+      data: {
+        function: \`\${MODULE}::todolist::delete_todo\`,
+        functionArguments: [id],
+      },
+    });
+    console.log('Deleted:', result.hash);
+  };
+
+  return (
+    <div>
+      <button onClick={() => handleCreate('New task')}>Create (pays gas)</button>
+      <button onClick={() => handleDelete(1)}>Delete (gasless)</button>
+    </div>
   );
 }
 \`\`\`

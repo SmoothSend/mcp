@@ -151,6 +151,50 @@ function TransferButton() {
   return <button onClick={handleTransfer}>Transfer</button>;
 }`,
   },
+  'use-smooth-send': {
+    title: 'useSmoothSend Hook — Per-Function Gasless Routing',
+    language: 'typescript',
+    code: `import { useSmoothSend, SmoothSendTransactionSubmitter } from '@smoothsend/sdk';
+import { useWallet } from '@aptos-labs/wallet-adapter-react';
+
+// Create once at MODULE SCOPE (not inside the component)
+const submitter = new SmoothSendTransactionSubmitter({
+  apiKey: process.env.NEXT_PUBLIC_SMOOTHSEND_API_KEY!,
+  network: 'mainnet', // or 'testnet'
+});
+
+// Do NOT set transactionSubmitter in AptosWalletAdapterProvider when using this hook
+
+function TodoList() {
+  const { account } = useWallet();
+
+  // Drop-in for useWallet().signAndSubmitTransaction
+  // Routes automatically: allowlisted functions → gasless, others → user pays
+  const { signAndSubmitTransaction } = useSmoothSend(submitter);
+
+  const handleDelete = async (id: number) => {
+    // 'delete_todo' whitelisted in Sponsorship Rules → gasless (relayer pays gas)
+    const result = await signAndSubmitTransaction({
+      data: {
+        function: \`\${MODULE_ADDRESS}::todolist::delete_todo\`,
+        functionArguments: [id],
+      },
+    });
+    console.log('Tx hash:', result.hash);
+  };
+
+  const handleCreate = async (content: string) => {
+    // 'create_todo' NOT in allowlist → user pays gas normally
+    const result = await signAndSubmitTransaction({
+      data: {
+        function: \`\${MODULE_ADDRESS}::todolist::create_todo\`,
+        functionArguments: [content],
+      },
+    });
+    console.log('Tx hash:', result.hash);
+  };
+}`,
+  },
   'testnet-setup': {
     title: 'Testnet Setup (Free)',
     language: 'typescript',
@@ -254,13 +298,14 @@ export const TOOL_DEFINITIONS = [
           type: 'string',
           enum: [
             'wallet-adapter-setup',
+            'use-smooth-send',
             'script-composer-usdc',
             'fee-preview',
             'error-handling',
             'testnet-setup',
           ],
           description:
-            'The integration pattern to get code for. "wallet-adapter-setup" is the most common starting point.',
+            'The integration pattern to get code for. "wallet-adapter-setup" makes all transactions gasless. "use-smooth-send" is for per-function routing (some functions gasless, others not).',
         },
       },
       required: ['use_case'],
