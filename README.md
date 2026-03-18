@@ -1,5 +1,7 @@
 # @smoothsend/mcp
 
+[![MCP Badge](https://lobehub.com/badge/mcp-full/smoothsend-mcp)](https://lobehub.com/mcp/smoothsend-mcp)
+
 MCP (Model Context Protocol) server for SmoothSend. Enables AI assistants in Cursor, Claude Desktop, Windsurf, and other MCP-compatible tools to help developers integrate gasless transactions on Aptos.
 
 ## What it does
